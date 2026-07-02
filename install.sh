@@ -16,6 +16,19 @@ VERSION="${GUARDRAIL_VERSION:-latest}" # "latest" or a tag like v0.5.0 / v0.9.2-
 say() { printf '\033[1;34m==>\033[0m %s\n' "$1"; }
 err() { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 
+# --- args (override env) ---
+# Piped form:  curl -fsSL .../install.sh | bash -s -- --channel beta
+# Args exist because the intuitive `GUARDRAIL_CHANNEL=beta curl ... | bash`
+# scopes the variable to curl, not bash, and silently installs stable.
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --channel) CHANNEL="${2:-}"; shift 2 ;;
+    --version) VERSION="${2:-}"; shift 2 ;;
+    beta|stable) CHANNEL="$1"; shift ;;   # bare word convenience: `bash -s -- beta`
+    *) err "unknown argument: $1 (supported: --channel beta|stable, --version vX.Y.Z, or a bare channel name)" ;;
+  esac
+done
+
 # --- detect platform ---
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"
