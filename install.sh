@@ -33,8 +33,12 @@ asset="guardrail_${os}_${arch}.tar.gz"
 #          beta binaries are built against the STAGING backend for real testing.
 # An explicit GUARDRAIL_VERSION always wins over the channel.
 if [ "$VERSION" = "latest" ] && [ "$CHANNEL" = "beta" ]; then
-  VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=20" 2>/dev/null \
-    | awk -F'"' '/"tag_name":/ {tag=$4} /"prerelease": true/ {print tag; exit}')"
+  # Buffer the response, then parse without early-exit: an awk `exit` mid-stream
+  # SIGPIPEs curl, and under `set -euo pipefail` that killed the script silently.
+  releases_json="$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=20" 2>/dev/null)" \
+    || err "could not query releases for $REPO (GitHub API unreachable or rate-limited)"
+  VERSION="$(printf '%s' "$releases_json" \
+    | awk -F'"' '/"tag_name":/ {tag=$4} /"prerelease": true/ && !found {v=tag; found=1} END {print v}')"
   [ -n "$VERSION" ] || err "no beta release found on $REPO (channel=beta)"
   say "Beta channel resolved to $VERSION"
 elif [ "$CHANNEL" != "stable" ] && [ "$CHANNEL" != "beta" ]; then
