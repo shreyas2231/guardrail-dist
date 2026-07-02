@@ -10,7 +10,8 @@ set -euo pipefail
 
 REPO="${GUARDRAIL_REPO:-Neatproxy/guardrail-dist}"
 INSTALL_DIR="${GUARDRAIL_INSTALL_DIR:-$HOME/.local/bin}"
-VERSION="${GUARDRAIL_VERSION:-latest}" # "latest" or a tag like v0.5.0
+CHANNEL="${GUARDRAIL_CHANNEL:-stable}" # stable (default) or beta
+VERSION="${GUARDRAIL_VERSION:-latest}" # "latest" or a tag like v0.5.0 / v0.9.2-beta.1
 
 say() { printf '\033[1;34m==>\033[0m %s\n' "$1"; }
 err() { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
@@ -25,6 +26,20 @@ case "$arch" in
   *) err "unsupported arch: $arch" ;;
 esac
 asset="guardrail_${os}_${arch}.tar.gz"
+
+# --- resolve version by channel ---
+# stable = GitHub's "latest" release (never a prerelease).
+# beta   = the newest release marked prerelease (how beta builds are published);
+#          beta binaries are built against the STAGING backend for real testing.
+# An explicit GUARDRAIL_VERSION always wins over the channel.
+if [ "$VERSION" = "latest" ] && [ "$CHANNEL" = "beta" ]; then
+  VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=20" 2>/dev/null \
+    | awk -F'"' '/"tag_name":/ {tag=$4} /"prerelease": true/ {print tag; exit}')"
+  [ -n "$VERSION" ] || err "no beta release found on $REPO (channel=beta)"
+  say "Beta channel resolved to $VERSION"
+elif [ "$CHANNEL" != "stable" ] && [ "$CHANNEL" != "beta" ]; then
+  err "unknown GUARDRAIL_CHANNEL '$CHANNEL' (stable|beta)"
+fi
 
 # --- resolve download URLs (public release assets; no auth) ---
 if [ "$VERSION" = "latest" ]; then
